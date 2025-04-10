@@ -5,7 +5,7 @@
  * Set the MAX_POWER const to calibrate the range of the expected power consumption.
  */
 
-const MAX_POWER= 1000;
+const MAX_POWER= 650;
 
 // set the LED's color
 function rgb(red, green, blue) {
@@ -52,13 +52,12 @@ function hsvToRgb(h, s, v) {
 // set the LED's color IN HSV values
 function hsv(h, s, v) {
   let c= hsvToRgb(h, s, v)
-  print (c[0],c[1], c[2]);
+//  print (c[0],c[1], c[2]);
   rgb (c[0],c[1], c[2]);
 }
 
-// between 0 and 1
-function clamp(num) {  
-return num <= 0 ? 0 : num >= 1  ? 1  : num
+function clamp(num, max) {  
+  return num <= 0 ? 0 : num >= max  ? max  : num
 }
 
 /////////////////////////
@@ -67,34 +66,36 @@ return num <= 0 ? 0 : num >= 1  ? 1  : num
 //
 /////////////////////////
 
-let lastPower= -1;
+let lastPower= -100;
 
 // blink white
-rgb(100,100,100);
-sleep(100);
-rgb(0,0,0);
+//rgb(100,100,100);
+//sleep(100);
+//rgb(14,11,10);
+
+print("PowerLED start");
+
 
 // continuously update the LED color 
-Timer.set( 500, true, function() {
+Timer.set( 1000, true, function() {
   Shelly.call(
     "switch.getStatus",
     { id: 0 },
     function (res, error_code, error_msg, ud) {
       let power= res.apower;
 
-      // only on change
-      if (power != lastPower) {
-        
+ 
+      // only on a significant change
+      if (Math.abs(power - lastPower) > 10) {
         lastPower= power;
         
         // treat production as consumption
         if (power < 0) power= -power;
-
-        power= (power / MAX_POWER);
         
-        let hue= ( (1-power) *2 /3 ) % 1;  
+        let p= clamp(power / MAX_POWER*4/6, 5/6  );
+        let hue= (1+ 4/6-p) % 1  ;
         hsv(hue, 1, 1);
-        // print("power: " + power*100 + "%  hue: " + hue);
+        print("PowerLED power: " + power + "W "+ Math.floor(power*100/MAX_POWER) + "% of " + MAX_POWER + "W hue: " + Math.floor(hue*360)+"°");
        }
     },
     null
