@@ -27,7 +27,6 @@ function rgb(red, green, blue) {
   Shelly.call("PLUGS_UI.SetConfig", config);
 }
 
-
 // convert HSV to RGB
 function hsvToRgb(h, s, v) {
   var r, g, b;
@@ -62,40 +61,40 @@ function clamp(num) {
 return num <= 0 ? 0 : num >= 1  ? 1  : num
 }
 
-
-
 /////////////////////////
 //
 // main()
 //
 /////////////////////////
 
+let lastPower= -1;
+
 // blink white
 rgb(100,100,100);
 sleep(100);
 rgb(0,0,0);
 
-
-let lastPower= -1;
-
+// continuously update the LED color 
 Timer.set( 500, true, function() {
   Shelly.call(
     "switch.getStatus",
     { id: 0 },
     function (res, error_code, error_msg, ud) {
       let power= res.apower;
+
+      // only on change
       if (power != lastPower) {
         
         lastPower= power;
         
         // treat production as consumption
         if (power < 0) power= -power;
-      
+
         power= (power / MAX_POWER);
-        let hue= ( (1-power) *2 /3 ) % 1;  
-        print("power: " + res.apower + "  hue: " + hue);
         
-        hsv(hue,1,1);
+        let hue= ( (1-power) *2 /3 ) % 1;  
+        hsv(hue, 1, 1);
+        // print("power: " + power*100 + "%  hue: " + hue);
        }
     },
     null
