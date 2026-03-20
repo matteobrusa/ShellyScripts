@@ -17,6 +17,7 @@ let BUFFER_MAX_BRIGHTNESS= // fail safe upper limit for the boiler power consump
   Math.floor( 700*100/BUFFER_MAX_POWER ) // 700W in %
 
 // some global vars
+let snooze= 0
 let localStatus= null
 let brightness= null // 0 to 100
 let power= null // buffer consumption
@@ -69,8 +70,8 @@ function handleResponse(res, err_code, err_msg) {  // callback from the hichi po
         // grid power < 0 --> increase buffer consumption, else decrease
         let delta= (-gridPower + POWER_TARGET) * 100 / BUFFER_MAX_POWER 
         
-        if (delta>5) // help convergence when ramping up
-          delta = delta *0.5 // since the dimmer position and the consumption are not linear
+//        if (delta>5) // help convergence when ramping up
+//          delta = delta *0.5 // since the dimmer position and the consumption are not linear
         
          if (on)
             print("gridPower: ", gridPower, "W   Brightness: ", brightness, "    Power: ", power, "W    On: ", on, "delta", delta)
@@ -92,6 +93,9 @@ function handleResponse(res, err_code, err_msg) {  // callback from the hichi po
             }
               if (newBrightness != STANDBY_BRIGHTNESS && newBrightness != brightness) { // if needed
                 setBrightness(newBrightness)
+                
+                // sleep 10 seconds to allow the power meter reading to reflect the changed load
+                snooze= 10
             }
         }
       }
@@ -104,6 +108,12 @@ function handleResponse(res, err_code, err_msg) {  // callback from the hichi po
 }
 
 function pollHichiMeter() {
+
+  // wait for the power meter to reflect the last change 
+  if (snooze > 0) {
+    snooze -= 1
+    return
+  }
   
   localStatus= Shelly.getComponentStatus("light:0") // fetch the internal Shelly state
   brightness= localStatus.brightness // 0 to 100
