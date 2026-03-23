@@ -13,6 +13,7 @@ let POWER_TARGET= -10 // aim to always give a bit
 let STANDBY_POWER= 5 // the power, below which the boiler is considered full
 let STANDBY_BRIGHTNESS= // the 0-100 dimming value set when the boiler is full
   Math.ceil( 50*100/BUFFER_MAX_POWER ) // 50W in %
+let BUFFER_MIN_BRIGHTNESS= 5 // min activation threshhold  
 let BUFFER_MAX_BRIGHTNESS= // fail safe upper limit for the boiler power consumptino
   Math.floor( 700*100/BUFFER_MAX_POWER ) // 700W in %
 
@@ -70,6 +71,8 @@ function handleResponse(res, err_code, err_msg) {  // callback from the hichi po
         // grid power < 0 --> increase buffer consumption, else decrease
         let delta= (-gridPower + POWER_TARGET) * 100 / BUFFER_MAX_POWER 
         
+        if (delta>0) // help convergence when ramping up
+          delta *= 0.8
 //        if (delta>5) // help convergence when ramping up
 //          delta = delta *0.5 // since the dimmer position and the consumption are not linear
         
@@ -79,12 +82,19 @@ function handleResponse(res, err_code, err_msg) {  // callback from the hichi po
         
         // add delta to the current brightness and clip it
         let newBrightness= Math.floor(brightness + delta)
+        
+        // clip
+        if (newBrightness < BUFFER_MIN_BRIGHTNESS) {
+          newBrightness= 0
+        }
+        
         if (newBrightness > BUFFER_MAX_BRIGHTNESS) {
             print("Unexpected brightness value: ", newBrightness )
             newBrightness= BUFFER_MAX_BRIGHTNESS
         }
         
-        if (newBrightness < 0 && on) { // turn the switch off if there's no excess power
+        
+        if (newBrightness <= 0 && on) { // turn the switch off if there's no excess power
             setSwitch(false)
         }
         else if (newBrightness > 0) { // update the boiler's power consumption
@@ -111,24 +121,26 @@ function pollHichiMeter() {
 
   // wait for the power meter to reflect the last change 
   if (snooze > 0) {
+//    print ("snooze", snooze)
     snooze -= 1
-    return
   }
+  else {
   
-  localStatus= Shelly.getComponentStatus("light:0") // fetch the internal Shelly state
-  brightness= localStatus.brightness // 0 to 100
-  power= localStatus.apower // instant power consumption
-  on= localStatus.output // switch status
+    localStatus= Shelly.getComponentStatus("light:0") // fetch the internal Shelly state
+    brightness= localStatus.brightness // 0 to 100
+    power= localStatus.apower // instant power consumption
+    on= localStatus.output // switch status
   
-  if (on && (power < STANDBY_POWER) ) {  // the boiler is fully charged, no need to poll the meter
-    if (brightness != STANDBY_BRIGHTNESS) { // also dial down the power for a soft restart
-      print(brightness,STANDBY_BRIGHTNESS )
-      setBrightness(STANDBY_BRIGHTNESS)
-      print("Buffer full, set brightness to minimum.")
-    } 
-  }
-  else { // fetch meter power flow to either turn on the boiler or modulate the power
-    Shelly.call("HTTP.GET", { url: HICHI_URL, timeout: 3 }, handleResponse);    
+    if (on && (power < STANDBY_POWER) ) {  // the boiler is fully charged, no need to poll the meter
+      if (brightness != STANDBY_BRIGHTNESS) { // also dial down the power for a soft restart
+        print(brightness,STANDBY_BRIGHTNESS )
+        setBrightness(STANDBY_BRIGHTNESS)
+        print("Buffer full, set brightness to minimum.")
+      } 
+    }
+    else { // fetch meter power flow to either turn on the boiler or modulate the power
+      Shelly.call("HTTP.GET", { url: HICHI_URL, timeout: 3 }, handleResponse);    
+    }
   }
   
   Timer.set(1000, false, pollHichiMeter, null)
